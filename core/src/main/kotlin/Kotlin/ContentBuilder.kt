@@ -6,23 +6,21 @@ import org.intellij.markdown.html.entities.EntityConverter
 import org.intellij.markdown.parser.LinkMap
 import java.util.*
 
-fun buildContent(tree: MarkdownNode, linkResolver: (String) -> ContentBlock, inline: Boolean = false): MutableContent {
+fun buildContent(tree: MarkdownNode, linkMap: LinkMap, linkResolver: (String) -> ContentBlock, inline: Boolean = false): MutableContent {
     val result = MutableContent()
     if (inline) {
-        buildInlineContentTo(tree, result, linkResolver)
+        buildInlineContentTo(tree, result, linkMap, linkResolver)
     }
     else {
-        buildContentTo(tree, result, linkResolver)
+        buildContentTo(tree, result, linkMap, linkResolver)
     }
     return result
 }
 
-fun buildContentTo(tree: MarkdownNode, target: ContentBlock, linkResolver: (String) -> ContentBlock) {
+fun buildContentTo(tree: MarkdownNode, target: ContentBlock, linkMap: LinkMap, linkResolver: (String) -> ContentBlock) {
 //    println(tree.toTestString())
     val nodeStack = ArrayDeque<ContentBlock>()
     nodeStack.push(target)
-
-    val linkMap = LinkMap.buildLinkMap(tree.node, tree.text)
 
     tree.visit {node, processChildren ->
         val parent = nodeStack.peek()
@@ -66,11 +64,11 @@ fun buildContentTo(tree: MarkdownNode, target: ContentBlock, linkResolver: (Stri
                 if (linkTextNode != null) {
                     if (destination != null) {
                         val link = ContentExternalLink(destination.text)
-                        renderLinkTextTo(linkTextNode, link, linkResolver)
+                        renderLinkTextTo(linkTextNode, link, linkMap, linkResolver)
                         parent.append(link)
                     } else {
                         val link = ContentExternalLink(linkTextNode.getLabelText())
-                        renderLinkTextTo(linkTextNode, link, linkResolver)
+                        renderLinkTextTo(linkTextNode, link, linkMap, linkResolver)
                         parent.append(link)
                     }
                 }
@@ -84,7 +82,7 @@ fun buildContentTo(tree: MarkdownNode, target: ContentBlock, linkResolver: (Stri
                     val link = linkInfo?.let { linkResolver(it.destination.toString()) } ?: linkResolver(labelText)
                     val linkText = node.child(MarkdownElementTypes.LINK_TEXT)
                     if (linkText != null) {
-                        renderLinkTextTo(linkText, link, linkResolver)
+                        renderLinkTextTo(linkText, link, linkMap, linkResolver)
                     } else {
                         link.append(ContentText(labelText))
                     }
@@ -168,16 +166,16 @@ private fun MarkdownNode.getLabelText() = children.filter { it.type == MarkdownT
 private fun keepEol(node: ContentNode) = node is ContentParagraph || node is ContentSection || node is ContentBlockCode
 private fun processingList(node: ContentNode) = node is ContentOrderedList || node is ContentUnorderedList
 
-fun buildInlineContentTo(tree: MarkdownNode, target: ContentBlock, linkResolver: (String) -> ContentBlock) {
+fun buildInlineContentTo(tree: MarkdownNode, target: ContentBlock, linkMap: LinkMap, linkResolver: (String) -> ContentBlock) {
     val inlineContent = tree.children.singleOrNull { it.type == MarkdownElementTypes.PARAGRAPH }?.children ?: listOf(tree)
     inlineContent.forEach {
-        buildContentTo(it, target, linkResolver)
+        buildContentTo(it, target, linkMap, linkResolver)
     }
 }
 
-fun renderLinkTextTo(tree: MarkdownNode, target: ContentBlock, linkResolver: (String) -> ContentBlock) {
+fun renderLinkTextTo(tree: MarkdownNode, target: ContentBlock, linkMap: LinkMap, linkResolver: (String) -> ContentBlock) {
     val linkTextNodes = tree.children.drop(1).dropLast(1)
     linkTextNodes.forEach {
-        buildContentTo(it, target, linkResolver)
+        buildContentTo(it, target, linkMap, linkResolver)
     }
 }
